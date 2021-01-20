@@ -1,0 +1,71 @@
+name: MWCP SharePoint Framework
+
+on:
+  push:
+    branches:
+    - main
+    - dev
+  pull_request:
+    branches:
+    - main
+    - dev
+
+# Variables that are available for all the jobs in the workflow
+env:
+  SPPKG_FILE_NAME: 'mwcp-21.sppkg'
+  SPO_SITE_APPCATALOG: 'https://ltsrdev.sharepoint.com/sites/mwcp21'
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    # Checkout code
+    - name: Checkout code
+      uses: actions/checkout@v1
+      
+    # Setup node.js runtime
+    - name: Use Node.js 10.x
+      uses: actions/setup-node@v1
+      with:
+        node-version: 10.x
+    
+    # npm install
+    - name: Run npm i
+      run: npm i
+    
+    # install gulp if mac
+    - name: Run npm i -g gulp
+      run: npm i -g gulp
+      if: runner.os == 'macOS'
+    
+    # gulp bundle and package solution
+    - name: Bundle and package
+      run: npm run build
+    
+    - uses: actions/upload-artifact@v2
+      with:
+        name: MWCP21-SharePoint-Framework
+        path: '**/*.sppkg'
+    
+    # Login to tenant using action-cli-login
+    - name: CLI for Microsoft 365 Login
+      uses: pnp/action-cli-login@v2.0.0
+      with:
+        ADMIN_USERNAME:  ${{ secrets.MWCP_USER }}
+        ADMIN_PASSWORD:  ${{ secrets.MWCP_PASSWORD }}
+    
+    # Deploy package to tenant using action-cli-deploy
+    - name: CLI for Microsoft 365 Deploy
+      uses: pnp/action-cli-deploy@v2.0.0
+      with:
+        APP_FILE_PATH: sharepoint/solution/${{ env.SPPKG_FILE_NAME }}
+        SKIP_FEATURE_DEPLOYMENT: true
+        OVERWRITE: true
+        SCOPE: sitecollection
+        SITE_COLLECTION_URL: ${{ env.SPO_SITE_APPCATALOG }}
+    
+    - name: Deploy App
+      uses: pnp/action-cli-runscript@v2.0.0
+      with:
+        CLI_MICROSOFT365_SCRIPT: ./assets/ci/deploy.sh --siteUrl ${{ env.SPO_SITE_APPCATALOG }}
